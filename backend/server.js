@@ -159,7 +159,7 @@ async function start() {
   app.get("/api/apis", async (req, res) => {
     try {
       const result = await pool.query(
-        "SELECT * FROM apis ORDER BY id"
+        "SELECT * FROM apis ORDER BY id DESC"
       );
 
       res.json(result.rows);
@@ -247,10 +247,19 @@ async function start() {
   // Delete an API
   app.delete("/api/apis/:id", async (req, res) => {
     try {
-      await pool.query(
-        "DELETE FROM apis WHERE id = $1",
+      const apiResult = await pool.query(
+        "SELECT name FROM apis WHERE id = $1",
         [req.params.id]
       );
+
+      if (apiResult.rows.length === 0) {
+        return res.status(404).json({ error: "API not found" });
+      }
+
+      await pool.query("DELETE FROM checks WHERE api = $1", [
+        apiResult.rows[0].name
+      ]);
+      await pool.query("DELETE FROM apis WHERE id = $1", [req.params.id]);
 
       res.json({
         message: "API deleted"
