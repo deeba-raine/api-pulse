@@ -99,6 +99,35 @@ body {
     background: #e5e5e5;
 }
 
+.delete-api-button {
+    margin-left: 10px;
+    color: #9b2020;
+    border-color: #e2a2a2;
+}
+
+.delete-api-button:hover {
+    background: #fdecec;
+}
+
+.api-message {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.api-message.success {
+    background: #e8f7ed;
+    border: 1px solid #9bd3aa;
+    color: #176b2c;
+}
+
+.api-message.error {
+    background: #fdecec;
+    border: 1px solid #e2a2a2;
+    color: #9b2020;
+}
+
 
 /* =========================
    Statistics
@@ -409,4 +438,3 @@ body {
     }
 
 }
-

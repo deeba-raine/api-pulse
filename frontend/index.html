@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 
@@ -30,21 +29,60 @@
                 </span>
             </div>
 
-
             <div class="top-right">
 
                 <span class="live">
                     <span class="live-dot"></span>
-                    Watching 5 ShopWave endpoints
+                    Watching live endpoints
                 </span>
 
-                <button class="button">
+                <button class="button" id="add-monitor-button">
                     + Add monitor
                 </button>
 
             </div>
 
         </header>
+
+
+        <!-- Add Monitor Form -->
+        <section id="add-monitor-form" class="add-monitor-form hidden">
+
+            <h2>Add API Monitor</h2>
+
+            <div id="api-message" class="api-message hidden" role="status"></div>
+
+            <form id="api-form">
+
+                <input
+                    type="text"
+                    id="api-name"
+                    placeholder="API name"
+                    required
+                >
+
+                <input
+                    type="url"
+                    id="api-url"
+                    placeholder="https://api.example.com"
+                    required
+                >
+
+                <button type="submit" class="button">
+                    Add API
+                </button>
+
+                <button
+                    type="button"
+                    id="cancel-button"
+                    class="button"
+                >
+                    Cancel
+                </button>
+
+            </form>
+
+        </section>
 
 
         <!-- Statistics -->
@@ -56,7 +94,7 @@
                 </div>
 
                 <div class="stat-value">
-                    5
+                    <span id="total-apis">0</span>
                 </div>
             </div>
 
@@ -67,7 +105,7 @@
                 </div>
 
                 <div class="stat-value healthy">
-                    4
+                    <span id="healthy-apis">0</span>
                 </div>
             </div>
 
@@ -78,7 +116,7 @@
                 </div>
 
                 <div class="stat-value down">
-                    1
+                    <span id="down-apis">0</span>
                 </div>
             </div>
 
@@ -89,7 +127,8 @@
                 </div>
 
                 <div class="stat-value">
-                    184 <span>ms</span>
+                    <span id="average-response">0</span>
+                    <span>ms</span>
                 </div>
             </div>
 
@@ -123,4 +162,3 @@
 </body>
 
 </html>
-```
