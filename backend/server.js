@@ -16,7 +16,7 @@ const requestTimeoutMs = 5000;
 const lastUp = {};
 
 // Check one API
-async function check(api) {
+async function check(api, trigger = "auto") {
   const start = Date.now();
   let status = 0;
 
@@ -42,9 +42,9 @@ async function check(api) {
   const responseTime = Date.now() - start;
 
   await pool.query(
-    `INSERT INTO checks (api, status, ms, up)
-     VALUES ($1, $2, $3, $4)`,
-    [api.name, status, responseTime, up]
+    `INSERT INTO checks (api, status, ms, up, trigger)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [api.name, status, responseTime, up, trigger]
   );
 
   // Basic alert
@@ -69,7 +69,7 @@ async function checkAll() {
   );
 
   await Promise.all(
-    result.rows.map(check)
+    result.rows.map(api => check(api))
   );
 
   console.log(
@@ -105,8 +105,21 @@ async function initialize() {
       status INT NOT NULL,
       ms INT NOT NULL,
       up BOOLEAN NOT NULL,
+      trigger TEXT NOT NULL DEFAULT 'auto',
       created_at TIMESTAMPTZ DEFAULT now()
     )
+  `);
+
+  await pool.query(`
+    ALTER TABLE checks
+    ADD COLUMN IF NOT EXISTS trigger TEXT NOT NULL DEFAULT 'auto'
+  `);
+
+  await pool.query(`
+    UPDATE checks
+    SET trigger = 'auto'
+    WHERE trigger IS NULL
+       OR trigger NOT IN ('auto', 'manual')
   `);
 }
 
@@ -183,9 +196,51 @@ async function start() {
     } catch (error) {
       console.error("Unable to add API:", error);
 
-      res.status(400).json({
+      if (error.code === "23505") {
+        return res.status(409).json({
+          error: "An API with this URL already exists"
+        });
+      }
+
+      if (error instanceof TypeError) {
+        return res.status(400).json({
+          error: "URL must be valid"
+        });
+      }
+
+      res.status(500).json({
         error: "Unable to add API"
       });
+    }
+  });
+
+  app.post("/api/apis/:id/check", async (req, res) => {
+    try {
+      const result = await pool.query(
+        "SELECT id, name, url FROM apis WHERE id = $1",
+        [req.params.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: "API not found" });
+      }
+
+      const api = result.rows[0];
+      await check(api, "manual");
+
+      const latest = await pool.query(
+        `SELECT id, api, status, ms, up, trigger, created_at
+         FROM checks
+         WHERE api = $1
+         ORDER BY id DESC
+         LIMIT 1`,
+        [api.name]
+      );
+
+      res.json(latest.rows[0]);
+    } catch (error) {
+      console.error("Unable to run manual check:", error);
+      res.status(500).json({ error: "Unable to run manual check" });
     }
   });
 
@@ -220,6 +275,7 @@ async function start() {
             status,
             ms,
             up,
+            trigger,
             created_at,
             ROW_NUMBER() OVER (
               PARTITION BY api
@@ -243,6 +299,7 @@ async function start() {
           ranked.status,
           ranked.ms,
           ranked.up,
+          ranked.trigger,
           ranked.created_at,
           uptime.uptime
         FROM ranked
