@@ -1,8 +1,6 @@
 const monitorList = document.getElementById("monitor-list");
 
-const addButton = document.getElementById("add-monitor-button");
-const addForm = document.getElementById("add-monitor-form");
-const cancelButton = document.getElementById("cancel-button");
+const clearButton = document.getElementById("clear-button");
 const apiForm = document.getElementById("api-form");
 const apiMessage = document.getElementById("api-message");
 
@@ -11,14 +9,11 @@ const apiMessage = document.getElementById("api-message");
 // Add API form
 // -------------------------
 
-addButton.addEventListener("click", () => {
-    addForm.classList.remove("hidden");
-});
-
-cancelButton.addEventListener("click", () => {
-    addForm.classList.add("hidden");
+clearButton.addEventListener("click", () => {
+    apiForm.reset();
     apiMessage.className = "api-message hidden";
     apiMessage.textContent = "";
+    document.getElementById("api-name").focus();
 });
 
 function showApiMessage(message, type) {
