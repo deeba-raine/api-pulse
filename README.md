@@ -1,6 +1,7 @@
 # API Monitor
 
-A small full-stack API monitoring dashboard built with Node.js, Express, PostgreSQL, and vanilla JavaScript.
+A small full-stack API monitoring dashboard built with Node.js, Express, PostgreSQL, and vanilla JavaScript. 
+
 
 The application lets you add public API endpoints, checks them automatically every 10 seconds, stores the results in PostgreSQL, and displays their status, response time, uptime, and recent check history in a browser dashboard.
 
@@ -85,15 +86,15 @@ An API is considered **UP** when its HTTP status is between `200` and `399`. Tim
 
 ## API routes
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/` | Serves the dashboard |
-| `GET` | `/health` | Checks the database connection |
-| `GET` | `/api/apis` | Lists registered monitors |
-| `POST` | `/api/apis` | Adds a monitor |
-| `DELETE` | `/api/apis/:id` | Deletes a monitor |
-| `POST` | `/api/apis/:id/check` | Runs a manual check |
-| `GET` | `/api/checks` | Returns recent checks and uptime |
+| Method     | Route                   | Description                      |
+| ---------- | ----------------------- | -------------------------------- |
+| `GET`    | `/`                   | Serves the dashboard             |
+| `GET`    | `/health`             | Checks the database connection   |
+| `GET`    | `/api/apis`           | Lists registered monitors        |
+| `POST`   | `/api/apis`           | Adds a monitor                   |
+| `DELETE` | `/api/apis/:id`       | Deletes a monitor                |
+| `POST`   | `/api/apis/:id/check` | Runs a manual check              |
+| `GET`    | `/api/checks`         | Returns recent checks and uptime |
 
 Example manual check request:
 
