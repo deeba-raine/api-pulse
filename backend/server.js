@@ -1,83 +1,38 @@
 const path = require("path");
-require("dotenv").config({
-  path: path.join(__dirname, "..", ".env")
-});
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const { Pool } = require("pg");
 const cron = require("node-cron");
 const express = require("express");
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL
-});
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const port = process.env.PORT || 3000;
 
-const port = Number.parseInt(process.env.PORT || "3000", 10);
-const requestTimeoutMs = 5000;
-
-const lastUp = {};
-
-// Check one API
+// Check one API (retry once, 10s timeout)
 async function check(api, trigger = "auto") {
   const start = Date.now();
   let status = 0;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    requestTimeoutMs
-  );
-
-  try {
-    const response = await fetch(api.url, {
-      signal: controller.signal
-    });
-
-    status = response.status;
-  } catch (error) {
-    console.error(`Unable to check ${api.name}:`, error.message);
-  } finally {
-    clearTimeout(timeout);
+  for (let i = 0; i < 2 && !status; i++) {
+    try {
+      const res = await fetch(api.url, { signal: AbortSignal.timeout(10000) });
+      status = res.status;
+    } catch (err) {
+      console.error(`${api.name} failed:`, err.message);
+    }
   }
-
-  const up = status >= 200 && status < 400;
-  const responseTime = Date.now() - start;
 
   await pool.query(
-    `INSERT INTO checks (api, status, ms, up, trigger)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [api.name, status, responseTime, up, trigger]
+    "INSERT INTO checks (api, status, ms, up, trigger) VALUES ($1, $2, $3, $4, $5)",
+    [api.name, status, Date.now() - start, status >= 200 && status < 400, trigger]
   );
-
-  // Basic alert
-  if (
-    lastUp[api.name] !== undefined &&
-    lastUp[api.name] !== up
-  ) {
-    console.log(
-      `>>> ALERT: ${api.name} is ${
-        up ? "back UP" : "DOWN"
-      } (status ${status})`
-    );
-  }
-
-  lastUp[api.name] = up;
 }
 
-// Check all registered APIs
 async function checkAll() {
-  const result = await pool.query(
-    "SELECT id, name, url FROM apis"
-  );
-
-  await Promise.all(
-    result.rows.map(api => check(api))
-  );
-
-  console.log(
-    `--- ${new Date().toLocaleTimeString()} ---`
-  );
+  const { rows } = await pool.query("SELECT * FROM apis");
+  await Promise.all(rows.map((api) => check(api)));
+  console.log(`--- ${new Date().toLocaleTimeString()} ---`);
 }
 
-// Create database tables
 async function initialize() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS apis (
@@ -85,18 +40,7 @@ async function initialize() {
       name TEXT NOT NULL,
       url TEXT NOT NULL UNIQUE,
       created_at TIMESTAMPTZ DEFAULT now()
-    )
-  `);
-
-  await pool.query(`
-    INSERT INTO apis (name, url)
-    VALUES
-      ('Users', 'https://jsonplaceholder.typicode.com/users'),
-      ('Products', 'https://dummyjson.com/products'),
-      ('Broken', 'https://httpbin.org/status/500'),
-      ('Flaky', 'https://httpbin.org/status/200,500')
-    ON CONFLICT (url) DO UPDATE SET name = EXCLUDED.name
-  `);
+    )`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS checks (
@@ -107,252 +51,122 @@ async function initialize() {
       up BOOLEAN NOT NULL,
       trigger TEXT NOT NULL DEFAULT 'auto',
       created_at TIMESTAMPTZ DEFAULT now()
-    )
-  `);
+    )`);
 
   await pool.query(`
-    ALTER TABLE checks
-    ADD COLUMN IF NOT EXISTS trigger TEXT NOT NULL DEFAULT 'auto'
-  `);
-
-  await pool.query(`
-    UPDATE checks
-    SET trigger = 'auto'
-    WHERE trigger IS NULL
-       OR trigger NOT IN ('auto', 'manual')
-  `);
+    INSERT INTO apis (name, url) VALUES
+      ('Users', 'https://jsonplaceholder.typicode.com/users'),
+      ('Products', 'https://dummyjson.com/products'),
+      ('Broken', 'https://httpbin.org/status/500'),
+      ('Flaky', 'https://httpbin.org/status/200,500')
+    ON CONFLICT (url) DO NOTHING`);
 }
+
+// Catches errors from async routes so each route doesn't need its own try/catch
+const wrap = (fn) => (req, res) =>
+  fn(req, res).catch((err) => {
+    console.error(err);
+    res.status(500).json({ error: "Something went wrong" });
+  });
 
 async function start() {
   await initialize();
 
   const app = express();
-
   app.use(express.json());
+  app.use(express.static(path.join(__dirname, "..", "frontend")));
 
-  app.use(
-    express.static(
-      path.join(__dirname, "..", "frontend")
-    )
-  );
+  // Server + database health
+  app.get("/health", wrap(async (req, res) => {
+    await pool.query("SELECT 1");
+    res.json({ status: "ok", database: "connected" });
+  }));
 
-  // Server/database health
-  app.get("/health", async (req, res) => {
-    try {
-      await pool.query("SELECT 1");
+  // List APIs
+  app.get("/api/apis", wrap(async (req, res) => {
+    const { rows } = await pool.query("SELECT * FROM apis ORDER BY id DESC");
+    res.json(rows);
+  }));
 
-      res.json({
-        status: "ok",
-        database: "connected"
-      });
-    } catch (error) {
-      console.error("Health check failed:", error);
-
-      res.status(503).json({
-        status: "error",
-        database: "disconnected"
-      });
-    }
-  });
-
-  // Get registered APIs
-  app.get("/api/apis", async (req, res) => {
-    try {
-      const result = await pool.query(
-        "SELECT * FROM apis ORDER BY id DESC"
-      );
-
-      res.json(result.rows);
-    } catch (error) {
-      console.error("Unable to load APIs:", error);
-
-      res.status(500).json({
-        error: "Unable to load APIs"
-      });
-    }
-  });
-
-  // Add a new API
-  app.post("/api/apis", async (req, res) => {
+  // Add an API
+  app.post("/api/apis", wrap(async (req, res) => {
     const { name, url } = req.body;
-
-    if (!name || !url) {
-      return res.status(400).json({
-        error: "Name and URL are required"
-      });
-    }
 
     try {
       new URL(url);
+    } catch {
+      return res.status(400).json({ error: "Name and a valid URL are required" });
+    }
+    if (!name) {
+      return res.status(400).json({ error: "Name and a valid URL are required" });
+    }
 
+    let api;
+    try {
       const result = await pool.query(
-        `INSERT INTO apis (name, url)
-         VALUES ($1, $2)
-         RETURNING *`,
+        "INSERT INTO apis (name, url) VALUES ($1, $2) RETURNING *",
         [name, url]
       );
-
-      res.status(201).json(result.rows[0]);
-    } catch (error) {
-      console.error("Unable to add API:", error);
-
-      if (error.code === "23505") {
-        return res.status(409).json({
-          error: "An API with this URL already exists"
-        });
+      api = result.rows[0];
+    } catch (err) {
+      if (err.code === "23505") {
+        return res.status(409).json({ error: "An API with this URL already exists" });
       }
-
-      if (error instanceof TypeError) {
-        return res.status(400).json({
-          error: "URL must be valid"
-        });
-      }
-
-      res.status(500).json({
-        error: "Unable to add API"
-      });
+      throw err;
     }
-  });
 
-  app.post("/api/apis/:id/check", async (req, res) => {
-    try {
-      const result = await pool.query(
-        "SELECT id, name, url FROM apis WHERE id = $1",
-        [req.params.id]
-      );
+    await check(api); // check right away
+    res.status(201).json(api);
+  }));
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: "API not found" });
-      }
+  // Manual check
+  app.post("/api/apis/:id/check", wrap(async (req, res) => {
+    const { rows } = await pool.query("SELECT * FROM apis WHERE id = $1", [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: "API not found" });
 
-      const api = result.rows[0];
-      await check(api, "manual");
+    await check(rows[0], "manual");
 
-      const latest = await pool.query(
-        `SELECT id, api, status, ms, up, trigger, created_at
-         FROM checks
-         WHERE api = $1
-         ORDER BY id DESC
-         LIMIT 1`,
-        [api.name]
-      );
-
-      res.json(latest.rows[0]);
-    } catch (error) {
-      console.error("Unable to run manual check:", error);
-      res.status(500).json({ error: "Unable to run manual check" });
-    }
-  });
-
-  // Delete an API
-  app.delete("/api/apis/:id", async (req, res) => {
-    try {
-      const apiResult = await pool.query(
-        "SELECT name FROM apis WHERE id = $1",
-        [req.params.id]
-      );
-
-      if (apiResult.rows.length === 0) {
-        return res.status(404).json({ error: "API not found" });
-      }
-
-      await pool.query("DELETE FROM checks WHERE api = $1", [
-        apiResult.rows[0].name
-      ]);
-      await pool.query("DELETE FROM apis WHERE id = $1", [req.params.id]);
-
-      res.json({
-        message: "API deleted"
-      });
-    } catch (error) {
-      console.error("Unable to delete API:", error);
-
-      res.status(500).json({
-        error: "Unable to delete API"
-      });
-    }
-  });
-
-  // Get monitoring results
-  app.get("/api/checks", async (req, res) => {
-    try {
-      const result = await pool.query(`
-        WITH ranked AS (
-          SELECT
-            id,
-            api,
-            status,
-            ms,
-            up,
-            trigger,
-            created_at,
-            ROW_NUMBER() OVER (
-              PARTITION BY api
-              ORDER BY id DESC
-            ) AS position
-          FROM checks
-        ),
-        uptime AS (
-          SELECT
-            api,
-            ROUND(
-              100.0 * COUNT(*) FILTER (WHERE up) /
-              NULLIF(COUNT(*), 0)
-            )::int AS uptime
-          FROM checks
-          GROUP BY api
-        )
-        SELECT
-          ranked.id,
-          ranked.api,
-          ranked.status,
-          ranked.ms,
-          ranked.up,
-          ranked.trigger,
-          ranked.created_at,
-          uptime.uptime
-        FROM ranked
-        JOIN uptime
-          ON uptime.api = ranked.api
-        WHERE ranked.position <= 5
-        ORDER BY ranked.api, ranked.id DESC
-      `);
-
-      res.json(result.rows);
-    } catch (error) {
-      console.error("Unable to load checks:", error);
-
-      res.status(500).json({
-        error: "Unable to load checks"
-      });
-    }
-  });
-
-  app.listen(port, () => {
-    console.log(
-      `Server running at http://localhost:${port}`
+    const latest = await pool.query(
+      "SELECT * FROM checks WHERE api = $1 ORDER BY id DESC LIMIT 1",
+      [rows[0].name]
     );
-  });
+    res.json(latest.rows[0]);
+  }));
 
-  // Run once when server starts
-  await checkAll();
+  // Delete an API and its checks
+  app.delete("/api/apis/:id", wrap(async (req, res) => {
+    const { rows } = await pool.query("SELECT name FROM apis WHERE id = $1", [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: "API not found" });
 
-  // Run every 10 seconds
-  cron.schedule("*/10 * * * * *", () => {
-    checkAll().catch(error =>
-      console.error(
-        "Scheduled check failed:",
-        error
+    await pool.query("DELETE FROM checks WHERE api = $1", [rows[0].name]);
+    await pool.query("DELETE FROM apis WHERE id = $1", [req.params.id]);
+    res.json({ message: "API deleted" });
+  }));
+
+  // Last 5 checks per API, plus overall uptime %
+  app.get("/api/checks", wrap(async (req, res) => {
+    const { rows } = await pool.query(`
+      SELECT c.*,
+        (SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE up) / COUNT(*))::int
+         FROM checks WHERE api = c.api) AS uptime
+      FROM checks c
+      WHERE c.id IN (
+        SELECT id FROM checks WHERE api = c.api ORDER BY id DESC LIMIT 5
       )
-    );
-  });
+      ORDER BY c.api, c.id DESC`);
+    res.json(rows);
+  }));
+
+  await checkAll(); // first round before the server accepts requests
+  app.listen(port, () => console.log(`Server running at http://localhost:${port}`));
+
+  // Then every 10 seconds
+  cron.schedule("*/10 * * * * *", () =>
+    checkAll().catch((err) => console.error("Scheduled check failed:", err))
+  );
 }
 
-start().catch(error => {
-  console.error(
-    "Monitor failed to start:",
-    error
-  );
-
+start().catch((err) => {
+  console.error("Monitor failed to start:", err);
   process.exitCode = 1;
 });

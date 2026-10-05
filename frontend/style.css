@@ -328,8 +328,6 @@ input:focus-visible {
 
 .card-header {
     padding: 16px 20px;
-
-    cursor: pointer;
 }
 
 .card-header:hover {
@@ -354,11 +352,6 @@ input:focus-visible {
     font-family: monospace;
     font-size: 12px;
 }
-
-.arrow {
-    color: #888;
-}
-
 
 /* =========================
    Status
@@ -398,32 +391,15 @@ input:focus-visible {
 
 
 /* =========================
-   Collapsed Card
-========================= */
-
-.collapsed-hint {
-    padding: 0 20px 15px;
-
-    color: #999;
-
-    font-size: 12px;
-}
-
-
-/* =========================
    Card Details
 ========================= */
 
 .card-details {
-    display: none;
+    display: block;
 
     padding: 18px 20px;
 
     border-top: 1px solid #ddd;
-}
-
-.card.open .card-details {
-    display: block;
 }
 
 

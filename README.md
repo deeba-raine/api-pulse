@@ -1,36 +1,37 @@
-# API Monitor
+# API Pulse
 
-A small full-stack API monitoring dashboard built with Node.js, Express, PostgreSQL, and vanilla JavaScript. 
+<p align="center">
+  An API monitoring dashboard built with Node.js, Express, PostgreSQL, and vanilla JavaScript.
+</p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black" alt="JavaScript">
+  <img src="https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js">
+  <img src="https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white" alt="Express">
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white" alt="HTML5">
+  <img src="https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white" alt="CSS3">
+</p>
 
-The application lets you add public API endpoints, checks them automatically every 10 seconds, stores the results in PostgreSQL, and displays their status, response time, uptime, and recent check history in a browser dashboard.
+<p align="center">
+  <img src="api-pulse.gif" alt="API Pulse demo" width="900">
+</p>
+
+API Pulse lets you register public API endpoints, checks them automatically every 10 seconds, stores the results in PostgreSQL, and displays their status, response time, uptime, and recent check history in a clean browser dashboard.
 
 ## Features
 
 - Add API monitors from the dashboard
 - Check registered APIs automatically every 10 seconds
-- Run an immediate manual check with **Check now**
 - Save check history in PostgreSQL
 - Track HTTP status, response time, and uptime
 - Mark checks as `auto` or `manual`
 - Five-second timeout for external API requests
 - Database health endpoint
 - Express serves both the frontend and backend API
-
-## Project structure
-
-```text
-api-pulse/
-├── backend/
-│   └── server.js
-├── frontend/
-│   ├── index.html
-│   ├── script.js
-│   └── style.css
-├── .env
-├── .gitignore
-└── package.json
-```
+- Always-visible monitor form with a **Clear** action
+- Always-open recent check tables for quick scanning
+- Responsive, minimalist dashboard layout
 
 ## Requirements
 
@@ -75,10 +76,11 @@ The server creates the `apis` and `checks` tables automatically when it starts. 
 
 ## Dashboard behavior
 
-Use **+ Add monitor** to register an API with a name and URL. After it is saved:
+The monitor form is visible when the dashboard opens. Enter an API name and URL, then select **Add API**. Use **Clear** to reset both fields and dismiss the latest form message.
 
 - The API is checked automatically every 10 seconds.
-- Expand its card and click **Check now** for an immediate check.
+- Each monitor displays its current status, response time, uptime, and recent check table.
+- Use **Delete** to remove a monitor.
 - Scheduled checks are labeled `auto`.
 - Button-triggered checks are labeled `manual`.
 
@@ -119,7 +121,7 @@ The `Broken` endpoint intentionally returns `500`. The `Flaky` endpoint is inten
 
 ### `Cannot GET /`
 
-Start the application with `npm start` from the project root and open `http://localhost:3000`. Do not open `frontend/index.html` directly.
+Start the application with `npm start` from the project root and open `http://localhost:3000`. Do not open `frontend/index.html` directly because Express serves the dashboard and API routes together.
 
 ### `EADDRINUSE: port 3000`
 

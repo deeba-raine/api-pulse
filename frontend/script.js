@@ -24,8 +24,13 @@ function showApiMessage(message, type) {
 apiForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const name = document.getElementById("api-name").value;
-    const url = document.getElementById("api-url").value;
+    // Show feedback right away so the button never looks dead
+    const submitButton = apiForm.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.textContent = "Adding...";
+
+    const name = document.getElementById("api-name").value.trim();
+    const url = document.getElementById("api-url").value.trim();
 
     try {
         const response = await fetch("/api/apis", {
@@ -47,11 +52,17 @@ apiForm.addEventListener("submit", async (event) => {
         apiForm.reset();
         showApiMessage("API monitor added successfully.", "success");
 
-        await loadMonitors();
+        // Show the new card now, and again shortly after,
+        // once its first background check has finished
+        loadMonitors().catch(console.error);
+        setTimeout(() => loadMonitors().catch(console.error), 3000);
 
     } catch (error) {
         console.error(error);
         showApiMessage(error.message, "error");
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = "Add API";
     }
 });
 
@@ -127,10 +138,6 @@ function createMonitorCard(monitor) {
 
                 </div>
 
-                <span class="arrow">
-                    ▶
-                </span>
-
                 <button class="button delete-api-button" type="button">
                     Delete
                 </button>
@@ -161,11 +168,6 @@ function createMonitorCard(monitor) {
         </div>
 
 
-        <div class="collapsed-hint">
-            Click to expand
-        </div>
-
-
         <div class="card-details">
 
             <div class="checks-title">
@@ -186,15 +188,7 @@ function createMonitorCard(monitor) {
     `;
 
 
-    card.querySelector(".card-header").addEventListener("click", (event) => {
-        if (event.target.closest(".delete-api-button")) {
-            return;
-        }
-        card.classList.toggle("open");
-    });
-
     card.querySelector(".delete-api-button").addEventListener("click", async (event) => {
-        event.stopPropagation();
         const button = event.currentTarget;
         button.disabled = true;
         button.textContent = "Deleting...";
@@ -342,9 +336,6 @@ async function loadMonitors() {
     );
 
 
-    if (monitorList.firstElementChild) {
-        monitorList.firstElementChild.classList.add("open");
-    }
 }
 
 
